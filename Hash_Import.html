@@ -1,0 +1,396 @@
+<html>
+<head>
+<title>TIE Hash Importer</title>
+<!--Ahmed Goda, Based on Sven Welschen code (Intel Security)-->
+<!--Version 2.1-->
+<!--19/04/2018-->
+<!--Updates:
+	1) Removal of on-focus clear in all input fields.
+	
+-->
+
+<!--Version 2.0-->
+<!--01/04/2017-->
+<!--Updates:
+	1) Add support of custom hash list (choose columns)
+	2) Add support of all acceptable hash types in McAfee TIE, in addition to comment
+	3) Optional global file name and comment for all hash files
+	4) Any order of columns will work
+	5) Stop if duplicate columns are chosen
+	6) Ignore empty lines, or lines with number of entries that is not equal to the chosen columns number
+	7) Log errors
+
+-->
+
+<!--Sven Welschen-->
+<!--Version 1.0-->
+<!--Intel Security 12/10/2014
+
+https://community.mcafee.com/t5/Documents/How-to-import-File-and-Certificate-Reputations-into-TIE/ta-p/552906
+
+-->	
+
+
+
+<style>
+#div_main{
+	width: 80%;
+	margin: 20px auto;	
+	text-align: center;
+}
+#file_rep {
+	width: 100%;
+	//text-align: left;
+	float:left;
+}
+#rep_level{
+	float:left;
+}
+#file_name{
+	float:left;
+	padding-left: 50px;
+}
+#comment{
+	float:left;
+	padding-left: 30px;
+}
+table{
+	border: 1px solid #000;
+	top: 50px;
+	margin: 0 auto;
+	padding: 20px;
+}
+th, td {
+    width: 150px;
+	text-align:left;
+	padding-right: 10px;
+}
+h3 {
+	text-align: left;
+}
+#log_div{
+	text-align: left;
+}
+//select {
+//	width: 150px;
+//}
+
+textarea {
+	width: 100%;
+}
+
+</style>
+</head>
+<body>
+<script>
+/*! @source http://purl.eligrey.com/github/FileSaver.js/blob/master/FileSaver.js */
+var saveAs=saveAs||"undefined"!==typeof navigator&&navigator.msSaveOrOpenBlob&&navigator.msSaveOrOpenBlob.bind(navigator)||function(a){"use strict";if("undefined"===typeof navigator||!/MSIE [1-9]\./.test(navigator.userAgent)){var k=a.document,n=k.createElementNS("http://www.w3.org/1999/xhtml","a"),w="download"in n,x=function(c){var e=k.createEvent("MouseEvents");e.initMouseEvent("click",!0,!1,a,0,0,0,0,0,!1,!1,!1,!1,0,null);c.dispatchEvent(e)},q=a.webkitRequestFileSystem,u=a.requestFileSystem||q||a.mozRequestFileSystem,
+y=function(c){(a.setImmediate||a.setTimeout)(function(){throw c;},0)},r=0,s=function(c){var e=function(){"string"===typeof c?(a.URL||a.webkitURL||a).revokeObjectURL(c):c.remove()};a.chrome?e():setTimeout(e,500)},t=function(c,a,d){a=[].concat(a);for(var b=a.length;b--;){var l=c["on"+a[b]];if("function"===typeof l)try{l.call(c,d||c)}catch(f){y(f)}}},m=function(c,e){var d=this,b=c.type,l=!1,f,p,k=function(){t(d,["writestart","progress","write","writeend"])},g=function(){if(l||!f)f=(a.URL||a.webkitURL||
+a).createObjectURL(c);p?p.location.href=f:void 0==a.open(f,"_blank")&&"undefined"!==typeof safari&&(a.location.href=f);d.readyState=d.DONE;k();s(f)},h=function(a){return function(){if(d.readyState!==d.DONE)return a.apply(this,arguments)}},m={create:!0,exclusive:!1},v;d.readyState=d.INIT;e||(e="download");if(w)f=(a.URL||a.webkitURL||a).createObjectURL(c),n.href=f,n.download=e,x(n),d.readyState=d.DONE,k(),s(f);else{a.chrome&&b&&"application/octet-stream"!==b&&(v=c.slice||c.webkitSlice,c=v.call(c,0,
+c.size,"application/octet-stream"),l=!0);q&&"download"!==e&&(e+=".download");if("application/octet-stream"===b||q)p=a;u?(r+=c.size,u(a.TEMPORARY,r,h(function(a){a.root.getDirectory("saved",m,h(function(a){var b=function(){a.getFile(e,m,h(function(a){a.createWriter(h(function(b){b.onwriteend=function(b){p.location.href=a.toURL();d.readyState=d.DONE;t(d,"writeend",b);s(a)};b.onerror=function(){var a=b.error;a.code!==a.ABORT_ERR&&g()};["writestart","progress","write","abort"].forEach(function(a){b["on"+
+a]=d["on"+a]});b.write(c);d.abort=function(){b.abort();d.readyState=d.DONE};d.readyState=d.WRITING}),g)}),g)};a.getFile(e,{create:!1},h(function(a){a.remove();b()}),h(function(a){a.code===a.NOT_FOUND_ERR?b():g()}))}),g)}),g)):g()}},b=m.prototype;b.abort=function(){this.readyState=this.DONE;t(this,"abort")};b.readyState=b.INIT=0;b.WRITING=1;b.DONE=2;b.error=b.onwritestart=b.onprogress=b.onwrite=b.onabort=b.onerror=b.onwriteend=null;return function(a,b){return new m(a,b)}}}("undefined"!==typeof self&&
+self||"undefined"!==typeof window&&window||this.content);"undefined"!==typeof module&&null!==module?module.exports=saveAs:"undefined"!==typeof define&&null!==define&&null!=define.amd&&define([],function(){return saveAs});
+
+</script>
+<script>
+
+var col_names = ["None", "FileName", "MD5Hash", "SHA256Hash", "SHA1Hash", "Comment"];
+var optional = "Optional";
+
+
+function makeXML(){
+	var time = new Date();
+	document.getElementById('log').innerHTML += "*** Run Script At: " + time.getHours() + ":" + time.getMinutes() + ":" + time.getSeconds() + '<br>';
+
+	var lines = document.getElementById("input_form").value.split(/\n/);
+	
+	var rep_level = document.getElementById("rep_level_l").value;	
+
+	var cols = get_columns();
+	
+	if (cols[0]){	
+		var files = 0;
+		var xml_out = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<TIEReputations>\n";
+		
+		for (index = 0; index < lines.length; ++index) {
+			if (lines[0].trim() === "Paste list to import here ...."){
+				document.getElementById('log').innerHTML += "You didn't provide file list." + '<br>';
+				break;
+			}
+			if (lines[index].length === 0 || !lines[index].trim()){
+				document.getElementById('log').innerHTML += "Empty Line " + (index + 1) + '<br>';
+				continue;
+			}
+			
+			var entries = lines[index].split(/,/);
+			if (entries.length != cols[1].length){
+				document.getElementById('log').innerHTML += "Wrong Line " + (index + 1) + ": \"" + lines[index] + "\", Not included in import file." + '<br>';
+				continue;
+			}
+		    
+			xml_out = xml_out + "\t<FileReputation>\n";
+			files++;
+
+			if (cols[2][0]){
+				xml_out = xml_out + "\t\t<FileName>" + cols[2][0] + "</FileName>\n";
+			}
+
+			for (i = 0; i < cols[1].length; ++i){
+				xml_out = xml_out + "\t\t<" + col_names[cols[1][i]] + ">" + entries[i].trim() + "</" + col_names[cols[1][i]] + ">\n";
+			}
+
+			xml_out = xml_out + "\t\t<ReputationLevel>" + rep_level + "</ReputationLevel>\n";			
+			
+			if (cols[2][1]){
+				xml_out = xml_out + "\t\t<Comment>" + cols[2][1] + "</Comment>\n";
+			}
+			
+			xml_out = xml_out + "\t</FileReputation>\n";
+			
+		}
+		xml_out = xml_out + "</TIEReputations>";		
+		
+		if (files){	
+			document.getElementById("output_form").value = xml_out;
+			var blob = new Blob([xml_out], {type: "text/plain;charset=utf-8"});
+			saveAs(blob, "import.xml");
+			document.getElementById('log').innerHTML += "File Saved!!" + '<br>';
+		}
+		else{
+			document.getElementById('log').innerHTML += "No valid files!!" + '<br>';
+		}
+	
+	}else {
+		document.getElementById('log').innerHTML += "Duplicate Option " + cols[1] + '<br>';
+	}
+}
+
+function get_columns() {
+	
+	var cols = [];
+	var value = "";
+	
+	var options = is_options();
+	
+	for (index = 1; index <= 5; ++index){
+		value = get_unique_column(cols, index);
+		if (value == 1){
+			//filename			
+			if (options[0]){
+				return [false, "Error: A filename column is already chosen."];
+			}
+			cols.push(value);
+		}
+		else if (value == 5){
+			//comment
+			if (options[1]){
+				return [false, "Error: A comment column is already chosen."];
+			}
+			cols.push(value);
+		} 
+		
+		else if (value){
+			cols.push(value);
+		}
+		
+	}
+	
+	if (cols.length > 0){
+		//some columns chosen
+		return [true, cols, options];
+	}
+	else{
+		return [false, "Error: All columns are none."]
+	}
+}
+
+function get_unique_column(selected_list, col_num){
+	var contains = function(needle) {
+	    var findNaN = needle !== needle;
+	    var indexOf;
+
+	    if(!findNaN && typeof Array.prototype.indexOf === 'function') {
+	        indexOf = Array.prototype.indexOf;
+	    } else {
+	        indexOf = function(needle) {
+	            var i = -1, index = -1;
+
+	            for(i = 0; i < this.length; i++) {
+	                var item = this[i];
+
+	                if((findNaN && item !== item) || item === needle) {
+	                    index = i;
+	                    break;
+	                }
+	            }
+
+	            return index;
+	        };
+	    }
+
+	    return indexOf.call(this, needle) > -1;
+	};
+	column = "column" + col_num
+	//document.getElementById('log').innerHTML += column + '<br>';
+	if (document.getElementById(column).value != '0'){
+		if (!contains.call(selected_list, document.getElementById(column).value)){
+			return document.getElementById(column).value;
+		}
+		else{
+			document.getElementById('log').innerHTML += "Error Redundant Column " + col_num + ": " + col_names[document.getElementById(column).value] + '<br>';
+			return false;
+		}
+	}
+	else{
+		return false;
+	}
+}
+
+function is_options(){
+	var filename = document.getElementById("filename").value.trim();
+	if (filename.trim() === optional || !filename.trim()){
+	// filename left "optional" or empty
+		document.getElementById('log').innerHTML += "Optional filename." + '<br>';
+		filename = false;
+	}
+	
+	var comment = document.getElementById("commentt").value.trim();
+	if (comment.trim() === optional || !comment.trim()){
+	// filename left "optional" or empty
+		comment = false;
+	}
+	var op = [filename, comment];
+	return op;
+}
+
+function getit(filename, text) {
+	var blob = new Blob([text], {type: "text/plain;charset=utf-8"});
+	saveAs(blob, filename);
+}
+
+function clearContents(element) {
+  element.value = '';
+}
+
+</script>
+<div id="div_main">
+	<table>
+
+	<tr>
+	<th rowspan="2" style="width:200px;padding-right:30px; vertical-align:middle; font-size: 25px;">File Attributes:</th><th>First Attribute</th> <th>Second Attribute</th> <th>Third Attribute</th> <th>Fourth Attribute</th> <th>Fifth Attribute</th>
+	</tr>
+
+	<tr>
+	
+	<td>
+	 <select id="column1">
+	  <option value="1"><script type="text/javascript">document.write(col_names[1]);</script></option>
+	  <option selected value="2"><script type="text/javascript">document.write(col_names[2]);</script></option>
+	  <option value="3"><script type="text/javascript">document.write(col_names[3]);</script></option>
+	  <option value="4"><script type="text/javascript">document.write(col_names[4]);</script></option>
+	  <option value="5"><script type="text/javascript">document.write(col_names[5]);</script></option>
+	</select>
+	</td>
+	<td>
+	 <select id="column2">
+	  <option value="1"><script type="text/javascript">document.write(col_names[1]);</script></option>
+	  <option value="2"><script type="text/javascript">document.write(col_names[2]);</script></option>
+	  <option value="3"><script type="text/javascript">document.write(col_names[3]);</script></option>
+	  <option value="4"><script type="text/javascript">document.write(col_names[4]);</script></option>  
+	  <option value="5"><script type="text/javascript">document.write(col_names[5]);</script></option>
+	  <option selected value="0"><script type="text/javascript">document.write(col_names[0]);</script></option>
+	</select>
+	</td>
+	<td>
+	 <select id="column3">
+	  <option value="1"><script type="text/javascript">document.write(col_names[1]);</script></option>
+	  <option value="2"><script type="text/javascript">document.write(col_names[2]);</script></option>
+	  <option value="3"><script type="text/javascript">document.write(col_names[3]);</script></option>
+	  <option value="4"><script type="text/javascript">document.write(col_names[4]);</script></option>
+	  <option value="5"><script type="text/javascript">document.write(col_names[5]);</script></option>
+	  <option selected value="0"><script type="text/javascript">document.write(col_names[0]);</script></option>    
+	</select>
+	</td>
+	<td>
+	 <select id="column4">
+	  <option value="1"><script type="text/javascript">document.write(col_names[1]);</script></option>
+	  <option value="2"><script type="text/javascript">document.write(col_names[2]);</script></option>
+	  <option value="3"><script type="text/javascript">document.write(col_names[3]);</script></option>
+	  <option value="4"><script type="text/javascript">document.write(col_names[4]);</script></option>
+	  <option value="5"><script type="text/javascript">document.write(col_names[5]);</script></option>
+	  <option selected value="0"><script type="text/javascript">document.write(col_names[0]);</script></option>    
+	</select>
+	</td>
+
+	<td>
+	 <select id="column5">
+	  <option value="1"><script type="text/javascript">document.write(col_names[1]);</script></option>
+	  <option value="2"><script type="text/javascript">document.write(col_names[2]);</script></option>
+	  <option value="3"><script type="text/javascript">document.write(col_names[3]);</script></option>
+	  <option value="4"><script type="text/javascript">document.write(col_names[4]);</script></option>
+	  <option value="5"><script type="text/javascript">document.write(col_names[5]);</script></option>
+	  <option selected value="0"><script type="text/javascript">document.write(col_names[0]);</script></option>     
+	</select>
+	</td>
+	
+	</tr>
+	</table>
+	<br>
+	<div id="file_rep">
+		
+		<br>
+		<div id="rep_level">
+		 <strong>Import with the following Reputation:</strong>
+		 <select id="rep_level_l">
+		  <option selected value="1">Known malicious</option>
+		  <option value="15">Most likely malicious</option>
+		  <option value="30">Might be malicious</option>
+		  <option value="50">Unknown</option>
+		  <option value="70">Might be trusted</option>
+		  <option value="85">Most likely trusted</option>
+		  <option value="99">Known trusted</option>
+		  <option value="0">Not Set</option>
+		</select> 
+		</div>
+		<div>
+		<div id="file_name"><strong>File Name (All Files): </strong><input type="text" name="filename" id="filename" value="" placeholder="Optional"></div>
+		<div id="comment"><strong>Comment (All Files): </strong><input type="text" name="commentt" id="commentt" value="" placeholder="Optional"></div>
+		<script type="text/javascript">			
+			document.getElementById("filename");
+			document.getElementById("commentt");
+		</script>
+		</div>
+		<br><br>
+	</div>
+	<textarea cols="100" rows="15" id="input_form" placeholder="Paste list to import here ....
+
+	As the order of choosen attributes above, Format can be like:
+	(If FileName, MD5 Hash and SHA256 Hash columns selected)
+	<File Name>,<MD5hash>,<SHA256hash>
+
+	(If only MD5 Hash)
+	<MD5hash>
+
+	Optional: 
+	Filename and Comment options applied on all entered files' hashes. 
+	Use them if all files have the same filename or comment. 
+	
+	And if used, Error if a chosen attribute with the same option exist."></textarea>
+	
+	<p>
+	<br>
+	 <button onclick="makeXML()">Export XML</button> 
+	</p>
+	
+	 	
+	<h3><strong>Output</strong></h3>
+	  <textarea name="out_data" cols="100" rows="15" onfocus="this.select();" id="output_form">Output text here...</textarea>
+
+	<br>
+	<div id="log_div">
+	<h3><strong>Log:</strong></h3>
+	<span id="log"></span>
+	</div>
+</div>
+</body>
+</html>
